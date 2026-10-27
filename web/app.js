@@ -55,6 +55,74 @@ function switchTab(history) {
   $("tab-history").setAttribute("aria-selected", String(history));
   if (history) renderHistory();
 }
+function setStep(step, scroll = true) {
+  if (step > 2 && !state.run) return toast("请先运行一次检查");
+  document
+    .querySelectorAll("[data-stage]")
+    .forEach((el) => (el.hidden = Number(el.dataset.stage) !== step));
+  document.querySelectorAll("[data-step]").forEach((el) => {
+    const n = Number(el.dataset.step);
+    el.classList.toggle("active", n === step);
+    el.classList.toggle("done", n < step);
+    el.disabled = n > 2 && !state.run;
+    if (n === step) el.setAttribute("aria-current", "step");
+    else el.removeAttribute("aria-current");
+  });
+  state.step = step;
+  const reviewed =
+    state.run &&
+    state.history.reviews.some((r) => r.run_id === state.run.run_id);
+  $("step-status-1").textContent = step === 1 ? "当前步骤" : "已录入";
+  $("step-status-2").textContent = state.busy
+    ? "运行中"
+    : state.run
+      ? "已完成"
+      : step === 2
+        ? "当前步骤"
+        : "待运行";
+  $("step-status-3").textContent = state.run ? "已生成" : "待生成";
+  $("step-status-4").textContent = reviewed ? "已保存" : "待复核";
+  if (step === 2) renderExecutionContext();
+  if (scroll)
+    document
+      .querySelector(".workflow")
+      .scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function renderExecutionContext() {
+  try {
+    const c = readCase();
+    const count = c.sources.filter((s) => s.verified).length;
+    $("execution-context").innerHTML =
+      `<p class="context-question">${esc(c.question)}</p><dl class="context-list"><div><dt>回答日期</dt><dd>${esc(c.answered_at || "未知")}</dd></div><div><dt>参考材料</dt><dd>${c.sources.length} 份 · ${count} 份正文已核验</dd></div><div><dt>回答来源</dt><dd>${esc(c.network_mode)}</dd></div></dl>${!count ? '<p class="context-warning">尚无已核验正文，事实评分将保留待核实。</p>' : ""}`;
+    $("material-state").textContent =
+      `${c.sources.length} 份参考材料 · ${count} 份已核验`;
+  } catch {
+    $("execution-context").innerHTML =
+      '<p class="context-warning">案例或材料JSON未通过解析，请返回检查。</p>';
+  }
+}
+function prepareRun() {
+  try {
+    const c = readCase();
+    if (!c.question.trim()) return toast("请填写用户问题");
+    if (!Array.isArray(c.sources)) throw new Error("参考材料必须为JSON数组");
+    renderSources(c.sources);
+    setStep(2);
+  } catch (e) {
+    toast("材料格式有误：" + e.message);
+  }
+}
+function invalidateRun() {
+  if (state.busy) return;
+  if (state.run) {
+    state.run = null;
+    $("result").innerHTML = "";
+    $("review-result").innerHTML = "";
+    toast("材料已修改，请重新检查；历史结果仍保留");
+  }
+  $("material-state").textContent = "材料有修改 · 待检查";
+  setStep(1, false);
+}
 function nav() {
   $("case-count").textContent = state.cases.length.toString().padStart(2, "0");
   $("case-list").innerHTML = state.cases
@@ -74,6 +142,7 @@ function nav() {
     );
 }
 function loadCase(c, run = null) {
+  if (state.busy) return toast("当前检查完成后可切换案例");
   state.current = structuredClone(c);
   state.run = run;
   $("case-title").textContent = c.title;
@@ -104,10 +173,16 @@ function loadCase(c, run = null) {
   renderSources(c.sources, run?.evidence);
   nav();
   switchTab(false);
-  if (run) renderResult(run);
-  else
-    $("result").innerHTML =
-      '<section class="empty-state"><span class="large-symbol">↗</span><h2>等待检查</h2><p>选择案例或编辑问答，查看来源冲突、有效范围和逐项评价。</p></section>';
+  $("run-error").innerHTML = "";
+  if (run) {
+    renderResult(run);
+    setStep(3, false);
+  } else {
+    $("result").innerHTML = "";
+    $("review-result").innerHTML = "";
+    setStep(1, false);
+  }
+  renderExecutionContext();
 }
 const statusNames = {
   usable: "可用于核对",
@@ -201,8 +276,13 @@ function renderResult(run) {
       return `<div class="score-row"><div><strong>${esc(r.name)}</strong> <small>权重 ${r.weight}</small><p>${esc(s.reason)}</p>${s.source_quote ? `<div class="evidence-quote">${esc(s.source_ids.join(" / "))}：${esc(s.source_quote)}</div>` : ""}</div><div class="score-num">${s.level === null ? "—" : ((s.level / 5) * r.weight).toFixed(0)}<small> / ${r.weight}</small></div></div>`;
     })
     .join("");
+  const unknown = d.unknown_dimensions.length;
   $("result").innerHTML =
-    `<section class="panel"><div class="panel-heading"><h2>检查结果</h2><span class="small-label">${run.mode === "llm" ? "AI REVIEW" : "RULE SCREEN"}</span></div><div class="result-top"><div><div class="score-large">${d.final_total === null ? "—" : d.final_total}<span>/ 100</span></div><div class="verdict">${esc(d.label)}</div></div><div class="hint">${d.unknown_dimensions.length ? d.unknown_dimensions.length + " 项待评分" : "九项评分已齐全"}<br>${esc(run.mode === "llm" ? run.meta.model : "规则引擎")} · ${run.meta.elapsed_ms} ms</div></div><p class="hint">${esc(j.summary)}</p>${d.cap < 100 ? `<p class="tag bad">风险封顶 ${d.cap} 分</p>` : ""}${checks.join("") || '<p class="hint">未发现规则候选。完整评价仍需核对九项标准。</p>'}</section><section class="panel"><div class="panel-heading"><h2>九项评分</h2><span class="small-label">WEIGHTED / 100</span></div>${scoreRows}${j.missing_points.length ? `<p class="hint">缺失要点：${esc(j.missing_points.join("；"))}</p>` : ""}</section>${reviewForm(run)}`;
+    `<div class="result-banner"><div><span class="eyebrow">${run.mode === "llm" ? "AI初评" : "规则初筛"}</span><h3>${esc(d.label)}</h3><p>${esc(j.summary)}</p></div><div class="result-metric"><strong>${d.final_total === null ? "—" : d.final_total}</strong><span>/ 100</span><small>${unknown ? unknown + " 项待评分" : "九项评分已齐全"}</small></div></div>
+    <div class="result-grid"><section class="panel"><div class="panel-heading"><h2>证据与风险</h2><span class="small-label">${checks.length} 个检查项</span></div>${d.cap < 100 ? `<p class="tag bad">风险封顶 ${d.cap} 分</p>` : ""}${checks.join("") || '<p class="hint">未发现规则候选。仍需结合材料完成九项评价。</p>'}<details class="evidence-details"><summary>本次采用的来源与状态</summary>${run.case.sources.map((source) => `<div class="source"><h3>${esc(source.title)}</h3><span class="tag">${esc(statusNames[ev.source_status[source.id]] || "待核查")}</span><p>${esc(source.text)}</p></div>`).join("") || '<p class="hint">暂无参考正文</p>'}</details></section><section class="panel"><div class="panel-heading"><h2>九项评分</h2><span class="small-label">权重合计 100</span></div>${scoreRows}${j.missing_points.length ? `<p class="hint">缺失要点：${esc(j.missing_points.join("；"))}</p>` : ""}<div class="result-meta">${esc(run.mode === "llm" ? run.meta.model : "规则引擎")} · ${run.meta.elapsed_ms} ms · 规则 ${esc(run.rule_version)}</div></section></div>`;
+  $("review-result").innerHTML = reviewForm(run);
+  $("review-context").innerHTML =
+    `<p class="context-question">${esc(run.case.question)}</p><div class="review-verdict">${esc(d.label)} <span>${d.final_total === null ? "待评分" : d.final_total + " / 100"}</span></div><p class="hint">${d.holds.length} 项待确认 · ${unknown} 项待评分</p><p class="hint">人工可补充评分、确认风险，或返回材料步骤修订后重新检查。</p>`;
   $("save-review").onclick = saveReview;
   $("source-select").onchange = () => {
     const s = run.case.sources.find((x) => x.id === $("source-select").value);
@@ -214,7 +294,7 @@ function renderResult(run) {
       `已有 ${reviews.length} 次复核，最近结论：${esc(reviews.at(-1).decision.label)}。机器初评已保留。`;
 }
 function reviewForm(run) {
-  return `<section class="panel"><div class="panel-heading"><h2>人工复核</h2><span class="small-label">HUMAN REVIEW</span></div><p class="hint">逐项选择等级。修正材料或回答后，应重新检查并保留新旧记录。</p><div class="review-grid">${state.rubric.map((r) => `<div><label for="review-${r.id}">${esc(r.name)} · ${r.weight}</label><select id="review-${r.id}"><option value="">待核实</option>${[0, 1, 3, 5].map((v) => `<option value="${v}" ${run.judgment.scores[r.id].level === v ? "selected" : ""}>${v} / 5 · ${esc(r.anchors[v])}</option>`).join("")}</select></div>`).join("")}</div><label for="source-select">事实与引用评分依据</label><select id="source-select"><option value="">尚无明确依据</option>${run.case.sources
+  return `<section class="panel review-form"><div class="panel-heading"><h2>确认评分与处理结论</h2><span class="small-label">HUMAN REVIEW</span></div><p class="hint">逐项选择等级。修正材料或回答后，应重新检查并保留新旧记录。</p><div class="review-grid">${state.rubric.map((r) => `<div><label for="review-${r.id}">${esc(r.name)} · ${r.weight}</label><select id="review-${r.id}"><option value="">待核实</option>${[0, 1, 3, 5].map((v) => `<option value="${v}" ${run.judgment.scores[r.id].level === v ? "selected" : ""}>${v} / 5 · ${esc(r.anchors[v])}</option>`).join("")}</select></div>`).join("")}</div><label for="source-select">事实与引用评分依据</label><select id="source-select"><option value="">尚无明确依据</option>${run.case.sources
     .filter((s) => run.evidence.active_source_ids.includes(s.id))
     .map(
       (s) =>
@@ -280,9 +360,12 @@ async function saveReview() {
     $("save-review").disabled = true;
     const review = await api("/api/review", body);
     state.history.reviews.push(review);
+    if (state.run?.run_id !== run.run_id)
+      return toast("人工复核已保存到原记录");
     $("review-saved").innerHTML =
       `<div class="review-confirmation">已保存 · ${esc(review.decision.label)} · ${review.decision.final_total ?? "待评分"} / 100<br>机器初评与人工结论分别保留。</div>`;
-    toast("人工复核已保存");
+    setStep(4, false);
+    toast("人工复核已保存，可在运行与复核记录中查看");
   } catch (e) {
     toast(e.message);
   } finally {
@@ -296,6 +379,15 @@ async function run() {
     state.busy = true;
     $("run").disabled = true;
     $("engine-badge").textContent = "RUNNING";
+    $("run-error").innerHTML = "";
+    document
+      .querySelectorAll(
+        ".input-column input, .input-column textarea, .input-column select",
+      )
+      .forEach((el) => (el.disabled = true));
+    $("import-btn").disabled = true;
+    $("new-case").disabled = true;
+    setStep(2, false);
     $("run-note").textContent =
       $("mode").value === "llm"
         ? "正在调用已配置模型并核验返回字段…"
@@ -306,15 +398,26 @@ async function run() {
     state.run = result;
     renderSources(result.case.sources, result.evidence);
     renderResult(result);
+    setStep(3);
     $("history-count").textContent = state.history.runs.length;
     toast("检查完成，结果已保存在本机");
   } catch (e) {
     state.run = null;
-    $("result").innerHTML =
+    $("review-result").innerHTML = "";
+    $("run-error").innerHTML =
       `<div class="error-box"><strong>本次检查未完成</strong><p>${esc(e.message)}</p></div>`;
+    setStep(2, false);
     toast(e.message);
   } finally {
     state.busy = false;
+    document
+      .querySelectorAll(
+        ".input-column input, .input-column textarea, .input-column select",
+      )
+      .forEach((el) => (el.disabled = false));
+    $("import-btn").disabled = false;
+    $("new-case").disabled = false;
+    setStep(state.step || 2, false);
     $("run").disabled = false;
     $("engine-badge").textContent = "READY";
     $("run-note").textContent =
@@ -361,6 +464,26 @@ async function init() {
       `<table><thead><tr><th>维度 / 权重</th><th>0</th><th>1</th><th>3</th><th>5</th></tr></thead><tbody>${data.rubric.map((r) => `<tr><td>${esc(r.name)} / ${r.weight}</td>${[0, 1, 3, 5].map((k) => `<td>${esc(r.anchors[k])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
     loadCase(data.cases[0]);
     $("run").onclick = run;
+    $("to-execution").onclick = prepareRun;
+    $("prepare-top").onclick = prepareRun;
+    document
+      .querySelectorAll("[data-step]")
+      .forEach((el) => (el.onclick = () => setStep(Number(el.dataset.step))));
+    document
+      .querySelectorAll("[data-go]")
+      .forEach((el) => (el.onclick = () => setStep(Number(el.dataset.go))));
+    document
+      .querySelectorAll(
+        ".input-column input, .input-column textarea, .input-column select",
+      )
+      .forEach((el) => el.addEventListener("input", invalidateRun));
+    $("view-records").onclick = () => switchTab(true);
+    $("mode").onchange = () => {
+      $("mode-description").textContent =
+        $("mode").value === "llm"
+          ? "调用项目模型，对照正文逐项评价，再由程序校验并判分。"
+          : "先运行本地规则，人工可继续完成九项评分。";
+    };
     $("show-rules").onclick = () => $("rules-dialog").showModal();
     $("close-rules").onclick = () => $("rules-dialog").close();
     $("tab-work").onclick = () => switchTab(false);
@@ -375,7 +498,7 @@ async function init() {
         toast(e.message);
       }
     };
-    $("result").addEventListener("click", (e) => {
+    $("review-result").addEventListener("click", (e) => {
       if (e.target.id === "export-case" && state.run)
         download(
           "dandao-" + state.run.case.id + ".json",
@@ -394,12 +517,14 @@ async function init() {
     $("import-btn").onclick = () => $("import-file").click();
     $("import-file").onchange = async (e) => {
       try {
+        if (state.busy) return toast("请等待当前检查完成");
         const f = e.target.files[0];
         if (!f) return;
         if (f.size > 2e6) throw new Error("文件超过2MB，请分批导入");
         const result = await api("/api/import", {
           cases: JSON.parse(await f.text()),
         });
+        if (state.busy) return toast("当前检查尚未结束，请稍后重新导入");
         const ids = new Set(result.cases.map((c) => c.id));
         state.cases = [
           ...state.cases.filter((c) => !ids.has(c.id)),

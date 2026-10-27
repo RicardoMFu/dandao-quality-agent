@@ -30,28 +30,22 @@
           >
             ＋ 新建问答
           </button>
-          <p>人工案例确定标准<br />AI评审扩大覆盖<br />复核结果用于校准</p>
+          <p>
+            <span class="sidebar-note-title">质检闭环</span>准备 → 检查 →
+            复核<br />修改后用原问题再验证
+          </p>
         </div>
       </aside>
       <main>
         <div class="heading">
           <div>
-            <div class="eyebrow">QUALITY REVIEW / V2</div>
+            <div class="eyebrow">DANDAO / QUALITY WORKSPACE</div>
             <h1 id="case-title">问答审查</h1>
-            <p class="intro">先核对依据，再判断回答。</p>
+            <p class="intro">问答检查 · 九维评分 · 人工复核</p>
           </div>
           <button id="show-rules" class="outline">
             评分标准 <span>↗</span>
           </button>
-        </div>
-        <div class="flow" aria-label="工作流程">
-          <div><b>01</b> 问答与参考材料</div>
-          <span>→</span>
-          <div><b>02</b> 规则初筛 · AI核对</div>
-          <span>→</span>
-          <div><b>03</b> 九维评分与风险判定</div>
-          <span>→</span>
-          <div><b>04</b> 人工复核与回流</div>
         </div>
         <div class="tabs" role="tablist">
           <button id="tab-work" class="active" role="tab" aria-selected="true">
@@ -61,8 +55,56 @@
           </button>
         </div>
         <section id="workspace">
-          <div class="work-grid">
-            <div class="input-column">
+          <nav class="workflow" aria-label="质检步骤">
+            <button
+              class="workflow-step active"
+              data-step="1"
+              aria-current="step"
+            >
+              <span class="step-number">01</span
+              ><span
+                ><strong>准备材料</strong
+                ><small>问题 · 回答 · 有效依据</small></span
+              ><em id="step-status-1">当前步骤</em>
+            </button>
+            <button class="workflow-step" data-step="2">
+              <span class="step-number">02</span
+              ><span
+                ><strong>运行质检</strong><small>规则筛查 · AI核对</small></span
+              ><em id="step-status-2">待运行</em>
+            </button>
+            <button class="workflow-step" data-step="3" disabled>
+              <span class="step-number">03</span
+              ><span
+                ><strong>评分与依据</strong
+                ><small>九维评分 · 风险判定</small></span
+              ><em id="step-status-3">待生成</em>
+            </button>
+            <button class="workflow-step" data-step="4" disabled>
+              <span class="step-number">04</span
+              ><span
+                ><strong>人工复核</strong
+                ><small>确认结论 · 保存回流</small></span
+              ><em id="step-status-4">待复核</em>
+            </button>
+          </nav>
+          <section
+            class="workflow-stage"
+            data-stage="1"
+            aria-labelledby="stage-title-1"
+          >
+            <div class="stage-heading">
+              <div>
+                <div class="eyebrow">STEP 01 / INPUT</div>
+                <h2 id="stage-title-1">问答与参考材料</h2>
+                <p>确认原问题、回答日期与参考正文，再交给质检Agent。</p>
+              </div>
+              <div class="material-actions">
+                <span id="material-state" class="stage-state">材料待检查</span
+                ><button id="prepare-top" class="primary">进入质检 →</button>
+              </div>
+            </div>
+            <div class="input-column material-grid">
               <section class="panel">
                 <div class="panel-heading">
                   <h2>问题与原回答</h2>
@@ -120,36 +162,185 @@
                 </details>
               </section>
             </div>
-            <div class="result-column">
-              <section class="panel run-panel">
+
+            <div class="stage-bottom">
+              <p>缺少材料也可初筛；无法核实的部分保留“待核实”。</p>
+              <button id="to-execution" class="primary">
+                下一步：运行质检 <span>→</span>
+              </button>
+            </div>
+          </section>
+          <section
+            class="workflow-stage"
+            data-stage="2"
+            hidden
+            aria-labelledby="stage-title-2"
+          >
+            <div class="stage-heading">
+              <div>
+                <div class="eyebrow">STEP 02 / AGENT</div>
+                <h2 id="stage-title-2">质检Agent工作流</h2>
+                <p>先筛选风险线索，再核对证据；最终分数由程序统一计算。</p>
+              </div>
+            </div>
+            <div class="execution-grid">
+              <div class="agent-map panel">
                 <div class="panel-heading">
-                  <h2>质检Agent</h2>
-                  <span id="engine-badge" class="small-label">READY</span>
+                  <h2>Agent内部流程</h2>
+                  <span class="small-label">固定流程 · 可追溯</span>
                 </div>
-                <p>
-                  规则筛出风险与时效候选；AI对照材料逐项评分；程序统一计算等级与封顶。
-                </p>
-                <div class="run-actions">
-                  <select id="mode" aria-label="运行模式">
-                    <option value="rules">规则初筛</option>
-                    <option value="llm">AI质检</option></select
-                  ><button id="run" class="primary">
-                    开始检查 <span>→</span>
+                <div class="engine-node">
+                  <span class="node-icon">01</span>
+                  <div>
+                    <strong>规则初筛</strong>
+                    <p>筛出时效、转介、隐私与越界候选。</p>
+                    <div class="tags">
+                      <span class="tag">日期与适用范围</span
+                      ><span class="tag">风险线索</span>
+                    </div>
+                  </div>
+                  <span class="node-owner">程序</span>
+                </div>
+                <div class="node-connector">↓</div>
+                <div class="engine-node">
+                  <span class="node-icon">02</span>
+                  <div>
+                    <strong>证据核对与逐项评价</strong>
+                    <p>对照参考正文，检查事实、来源冲突与遗漏。</p>
+                    <div class="tags">
+                      <span class="tag">来源原句</span
+                      ><span class="tag">九项评分理由</span>
+                    </div>
+                  </div>
+                  <span class="node-owner">AI / 人工</span>
+                </div>
+                <div class="node-connector">↓</div>
+                <div class="engine-node">
+                  <span class="node-icon">03</span>
+                  <div>
+                    <strong>字段校验与风险判定</strong>
+                    <p>检查引用是否存在，加权计分并执行风险封顶。</p>
+                    <div class="tags">
+                      <span class="tag">100分制</span
+                      ><span class="tag">未知项不补分</span>
+                    </div>
+                  </div>
+                  <span class="node-owner">程序</span>
+                </div>
+                <div class="map-output">
+                  <span>输出</span
+                  ><strong>候选问题 + 评分依据 + 待核实事项</strong
+                  ><span>→ 人工复核</span>
+                </div>
+              </div>
+              <div class="execution-side">
+                <section class="panel context-panel">
+                  <div class="panel-heading">
+                    <h2>本次检查</h2>
+                    <span class="small-label">CONTEXT</span>
+                  </div>
+                  <div id="execution-context"></div>
+                </section>
+                <section class="panel run-panel">
+                  <div class="panel-heading">
+                    <h2>运行方式</h2>
+                    <span id="engine-badge" class="small-label">READY</span>
+                  </div>
+                  <p id="mode-description">
+                    先运行本地规则，人工可继续完成九项评分。
+                  </p>
+                  <div class="run-actions">
+                    <select id="mode" aria-label="运行模式">
+                      <option value="rules">规则初筛</option>
+                      <option value="llm">AI质检</option></select
+                    ><button id="run" class="primary">
+                      开始检查 <span>→</span>
+                    </button>
+                  </div>
+                  <p id="run-note" class="hint">
+                    规则模式保留未评分项，人工可继续完成评分。
+                  </p>
+                </section>
+                <div id="run-error" role="alert"></div>
+              </div>
+            </div>
+            <div class="stage-bottom">
+              <button class="outline" data-go="1">← 返回修改材料</button>
+              <p>检查完成后进入“评分与依据”，机器结果自动留档。</p>
+            </div>
+          </section>
+          <section
+            class="workflow-stage"
+            data-stage="3"
+            hidden
+            aria-labelledby="stage-title-3"
+          >
+            <div class="stage-heading">
+              <div>
+                <div class="eyebrow">STEP 03 / FINDINGS</div>
+                <h2 id="stage-title-3">评分结果与判定依据</h2>
+                <p>总分用于评价；来源冲突、关键风险与未知项单独保留。</p>
+              </div>
+              <button class="primary" data-go="4">
+                进入人工复核 <span>→</span>
+              </button>
+            </div>
+            <div id="result"></div>
+            <div class="stage-bottom">
+              <button class="outline" data-go="1">← 修订输入材料</button
+              ><button class="primary" data-go="4">
+                下一步：人工复核 <span>→</span>
+              </button>
+            </div>
+          </section>
+          <section
+            class="workflow-stage"
+            data-stage="4"
+            hidden
+            aria-labelledby="stage-title-4"
+          >
+            <div class="stage-heading">
+              <div>
+                <div class="eyebrow">STEP 04 / REVIEW</div>
+                <h2 id="stage-title-4">人工复核与改进记录</h2>
+                <p>机器初评保留原样；人工评分、判断和修改建议另存一条记录。</p>
+              </div>
+              <button class="outline" data-go="3">查看机器初评 ↗</button>
+            </div>
+            <div class="review-layout">
+              <div id="review-result"></div>
+              <div class="review-side">
+                <section class="panel">
+                  <div class="panel-heading">
+                    <h2>本条初评</h2>
+                    <span class="small-label">MACHINE RESULT</span>
+                  </div>
+                  <div id="review-context"></div>
+                </section>
+                <section class="feedback-path">
+                  <div class="eyebrow">FEEDBACK LOOP</div>
+                  <h3>复核之后</h3>
+                  <ol>
+                    <li>
+                      <strong>记录分歧</strong
+                      ><span>保留机器结果与人工结论</span>
+                    </li>
+                    <li>
+                      <strong>整理修改建议</strong
+                      ><span>语料、引用或回答规则</span>
+                    </li>
+                    <li>
+                      <strong>修订后再检查</strong
+                      ><span>使用同一问题对照结果</span>
+                    </li>
+                  </ol>
+                  <button id="view-records" class="outline">
+                    查看复核记录 →
                   </button>
-                </div>
-                <p id="run-note" class="hint">
-                  规则模式保留未评分项，人工可继续完成评分。
-                </p>
-              </section>
-              <div id="result">
-                <section class="empty-state">
-                  <span class="large-symbol">↗</span>
-                  <h2>等待检查</h2>
-                  <p>选择案例或编辑问答，查看来源冲突、有效范围和逐项评价。</p>
                 </section>
               </div>
             </div>
-          </div>
+          </section>
         </section>
         <section id="history" hidden></section>
         <footer>
