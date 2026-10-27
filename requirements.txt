@@ -1,0 +1,4 @@
+pydantic>=2.10,<3
+pandas>=2.2,<3
+openpyxl>=3.1,<4
+xlrd>=2.0,<3

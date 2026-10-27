@@ -1,0 +1,8 @@
+{
+  "version": "v1.0.0",
+  "eligible_source": "联网搜索",
+  "empty_answer_policy": "not_applicable",
+  "missing_citation_policy": "unverifiable",
+  "fetch_enabled": false
+}
+
